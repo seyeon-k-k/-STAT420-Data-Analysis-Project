@@ -1,0 +1,318 @@
+---
+title: "Data Analysis Project Proposal"
+output: html_document
+date: "2024-11-28"
+---
+
+## Title: The Science of Wine: Predicting Quality from Chemical Properties
+
+### 1. Complete the dataset
+
+We combine "winequality-white.csv" and "winequality-red.csv" and add a new variable, `color`, which represents as 1 for red wine and 0 for white wine.
+
+```{r}
+
+wine_data_white = read.csv("winequality-white.csv", sep=";")
+
+# Add the "color" variable for white wine (0 = white wine)
+wine_data_white$color = 0
+
+wine_data_red = read.csv("winequality-red.csv", sep=";")
+
+# Add the "color" variable for red wine (1 = red wine)
+wine_data_red$color = 1
+
+# Combine the two datasets
+wine_data_combined = rbind(wine_data_white, wine_data_red)
+
+# Make sure the "quality" variable is numeric
+wine_data_combined$quality <- as.numeric(wine_data_combined$quality)
+
+str(wine_data_combined)
+
+```
+
+When it comes to "quality" variable that we are using as the target variable, we use the variable as numeric, assuming that the difference between a quality of 6 and 7 is the same as the difference between a quality of 7 and 8 and allowing to make predictions for any quality.
+
+### 2. Look into Colinearity
+
+When we look into the colinearity among variables, there seems no big colinearity.
+
+```{r, message = FALSE, warning = FALSE}
+
+library(faraway)
+pairs(wine_data_combined, col = "darkorange")
+
+```
+```{r}
+
+round(cor(wine_data_combined), 2)
+
+```
+
+### 3. Build Additive Multi Linear Regression Model
+
+We first build additive MLR model for ground work and we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
+
+```{r}
+
+additive_model = lm(quality ~ ., data = wine_data_combined)
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model) / (1 - hatvalues(additive_model))) ^ 2))
+additive_model_CVRMSE
+
+```
+Here, let's take a look at influential points.
+
+```{r, message = FALSE, warning = FALSE}
+
+sum(cooks.distance(additive_model) > 4 / length(cooks.distance(additive_model)))
+
+```
+Here we find 317 influential points in our dataset and remove them which actually works!!
+
+```{r, message = FALSE, warning = FALSE}
+
+cd = cooks.distance(additive_model)
+
+additive_model_fix = lm(quality ~ ., data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model_fix)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model_fix) / (1 - hatvalues(additive_model_fix))) ^ 2))
+additive_model_CVRMSE
+
+```
+
+Here we try two-way interaction model and three-way interaction model and two-way interaction model with quadratic terms as well. We can observe the adjusted R Sqaured and cross-validated RMSE get bigger as the model gets bigger.
+
+```{r}
+
+interaction2_model = lm(quality ~ .^2, data = wine_data_combined)
+
+cd = cooks.distance(interaction2_model)
+
+interaction2_model_fix = lm(quality ~ .^2, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction2_model_adjR2 = summary(interaction2_model_fix)$adj.r.squared
+interaction2_model_adjR2
+# Cross-Validated RMSE 
+interaction2_model_CVRMSE = sqrt(mean((resid(interaction2_model_fix) / (1 - hatvalues(interaction2_model_fix))) ^ 2))
+interaction2_model_CVRMSE
+
+```
+
+```{r}
+
+interaction3_model = lm(quality ~ .^3, data = wine_data_combined)
+
+cd = cooks.distance(interaction3_model)
+
+interaction3_model_fix = lm(quality ~ .^3, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction3_model_adjR2 = summary(interaction3_model_fix)$adj.r.squared
+interaction3_model_adjR2
+# Cross-Validated RMSE 
+interaction3_model_CVRMSE = sqrt(mean((resid(interaction3_model_fix) / (1 - hatvalues(interaction3_model_fix))) ^ 2))
+interaction3_model_CVRMSE
+```
+```{r}
+
+poly_model = lm(quality ~ .^2 + I(fixed.acidity^2) + I(volatile.acidity^2) + I(citric.acid^2) + I(residual.sugar^2) + I(chlorides^2) + I(free.sulfur.dioxide^2) + I(total.sulfur.dioxide^2) + I(density^2) + I(pH^2) + I(alcohol^2) + I(color^2), data = wine_data_combined)
+
+cd = cooks.distance(poly_model)
+
+poly_model_fix = lm(quality ~ .^2 + I(fixed.acidity^2) + I(volatile.acidity^2) + I(citric.acid^2) + I(residual.sugar^2) + I(chlorides^2) + I(free.sulfur.dioxide^2) + I(total.sulfur.dioxide^2) + I(density^2) + I(pH^2) + I(alcohol^2) + I(color^2), data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+poly_model_adjR2 = summary(poly_model_fix)$adj.r.squared
+poly_model_adjR2
+# Cross-Validated RMSE 
+poly_model_CVRMSE = sqrt(mean((resid(poly_model_fix) / (1 - hatvalues(poly_model_fix))) ^ 2))
+poly_model_CVRMSE
+
+```
+
+### 4. Make The Response Logged
+
+We just give it a shot on logging the responsem and the result is.... terrible.
+
+```{r}
+
+response_log_model = lm(log(quality) ~ ., data = wine_data_combined)
+
+cd = cooks.distance(response_log_model)
+
+response_log_model_fix = lm(log(quality) ~ ., data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+response_log_model_adjR2 = summary(response_log_model_fix)$adj.r.squared
+response_log_model_adjR2
+# Cross-Validated RMSE 
+response_log_model_CVRMSE = sqrt(mean((resid(response_log_model_fix) / (1 - hatvalues(response_log_model_fix))) ^ 2))
+response_log_model_CVRMSE
+```
+
+### 5. Make Some Predictors Logged
+
+```{r}
+
+log_model = lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar + chlorides + log(free.sulfur.dioxide) + log(total.sulfur.dioxide) + density + pH + sulphates + alcohol + color, data = wine_data_combined)
+
+cd = cooks.distance(log_model)
+
+log_model_fix = lm(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar + chlorides + log(free.sulfur.dioxide) + log(total.sulfur.dioxide) + density + pH + sulphates + alcohol + color, data = wine_data_combined, subset = cd < 4 / length(cd))
+  
+# Adjusted R Sqaured 
+log_model_adjR2 = summary(log_model_fix)$adj.r.squared
+log_model_adjR2
+# Cross-Validated RMSE 
+log_model_CVRMSE = sqrt(mean((resid(log_model_fix) / (1 - hatvalues(log_model_fix))) ^ 2))
+log_model_CVRMSE
+
+
+```
+### 6. Try Box-Cox Transformation On The Response Variable
+
+We shortly introduced Box-Cox Transformation in the class, but here we are going to try applying it referring to the  textbook. 
+
+```{r}
+
+library(MASS)
+
+model = lm(quality ~ ., data = wine_data_combined)
+cd = cooks.distance(model)
+
+bc = boxcox(lm(quality ~ ., data = wine_data_combined, subset = cd < 4 / length(cd)))
+lambda = bc$x[which.max(bc$y)]
+quality_bc = (wine_data_combined$quality^lambda - 1) / lambda
+boxcox_model = lm(quality_bc ~ ., data = wine_data_combined)
+
+# Adjusted R Sqaured 
+boxcox_model_adjR2 = summary(boxcox_model)$adj.r.squared
+boxcox_model_adjR2
+# Cross-Validated RMSE 
+boxcox_model_CVRMSE = sqrt(mean((resid(boxcox_model) / (1 - hatvalues(boxcox_model))) ^ 2))
+boxcox_model_CVRMSE
+
+
+```
+
+### 7. Backward Model Selection
+
+Here we first try backward selection procedure with the two-way interaction model. Then, we do backward selection procedure with the two-way interaction model again, but this time we apply Box-Cox Transformation on it. (We are supposed to try three-way interaction model as it has better performance, but it takes too long to get the model from backward selection)
+
+```{r}
+# Backward selection procedure with the two-way interaction model
+backwardBIC_model = step(interaction2_model, direction = "backward", k = log(length(resid(interaction2_model))), trace = 0, na.action = na.omit)
+
+backwardBIC_model_adjR2 = summary(backwardBIC_model)$adj.r.squared
+backwardBIC_model_adjR2
+# Cross-Validated RMSE 
+backwardBIC_model_CVRMSE = sqrt(mean((resid(backwardBIC_model) / (1 - hatvalues(backwardBIC_model))) ^ 2))
+backwardBIC_model_CVRMSE
+
+# Backward selection procedure with the two-way interaction model with Box-Cox Transformation
+
+bc = boxcox(lm(quality ~ (.- color)^2, data = wine_data_combined))
+lambda = bc$x[which.max(bc$y)]
+quality_bc = (wine_data_combined$quality^lambda - 1) / lambda
+boxcox_bigmodel = lm(quality_bc ~ (.- color)^2, data = wine_data_combined)
+
+# Adjusted R Sqaured 
+boxcox_bigmodel_adjR2 = summary(boxcox_model)$adj.r.squared
+boxcox_bigmodel_adjR2
+# Cross-Validated RMSE 
+boxcox_bigmodel_CVRMSE = sqrt(mean((resid(boxcox_model) / (1 - hatvalues(boxcox_model))) ^ 2))
+boxcox_bigmodel_CVRMSE
+
+backwardBIC_bcmodel = step(boxcox_bigmodel, direction = "backward", k = log(length(resid(boxcox_bigmodel))), trace = 0)
+
+# Adjusted R Sqaured 
+backwardBIC_bcmodel_adjR2 = summary(backwardBIC_model)$adj.r.squared
+backwardBIC_bcmodel_adjR2
+# Cross-Validated RMSE 
+backwardBIC_bcmodel_CVRMSE = sqrt(mean((resid(backwardBIC_bcmodel) / (1 - hatvalues(backwardBIC_bcmodel))) ^ 2))
+backwardBIC_bcmodel_CVRMSE
+
+```
+
+### 9. Choose the best model
+
+```{r}
+
+comparison_table1 =  data.frame(
+  Model = c("Additive Model", "Two-Way Interaction Model", "Three-Way Interaction Model", "Quadractic Model"),
+  Adjusted_R2 = c(additive_model_adjR2, interaction2_model_adjR2, interaction3_model_adjR2, poly_model_adjR2),
+  CVRMSE = c(additive_model_CVRMSE, interaction2_model_CVRMSE, interaction3_model_CVRMSE, poly_model_CVRMSE)
+)
+
+print(comparison_table1)
+
+comparison_table2 =  data.frame(
+  Model = c("Logged Response Model", "Logged Predictors Model", "Box-Cox Model"),
+  Adjusted_R2 = c(response_log_model_adjR2, log_model_adjR2, boxcox_model_adjR2),
+  CVRMSE = c(response_log_model_CVRMSE, log_model_CVRMSE, boxcox_model_CVRMSE)
+)
+
+print(comparison_table2)
+
+comparison_table3 =  data.frame(
+  Model = c("Backward Selection From Two-Way Interaction Model", "Backward Selection From Two-Way Interaction Model (Box-Cox)"),
+  Adjusted_R2 = c(backwardBIC_model_adjR2, backwardBIC_bcmodel_adjR2),
+  CVRMSE = c(backwardBIC_model_CVRMSE, backwardBIC_bcmodel_CVRMSE)
+)
+
+print(comparison_table3)
+
+```
+
+
+
+
+### 9. Diagnose The Chosen Model 
+
+```{r}
+
+
+plot(fitted(interaction3_model_fix), resid(interaction3_model_fix), col = "grey", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals Plot")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+plot(fitted(backwardBIC_bcmodel), resid(backwardBIC_bcmodel), col = "grey", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals Plot")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+
+```
+Here we can see the issue with the structure of our data. Since our response variable "quality" is discrete, we are facing problems with the residuals because the MLR model assumes continuous data and seeing violations of homoscedasticity and linearity assumption.
+
+Here we do Breusch-Pagan Test and Shapiro-Wilk Test for formal testing and find very small p-values for both tests as we expected.
+
+```{r, message = FALSE, warning = FALSE}
+
+library(lmtest)
+
+bptest(interaction3_model_fix)
+
+
+# We cannot use shapiro.test as the sample size is over 5000
+# shapiro.test(resid(backwardBIC_model2))
+
+# Therefore here we use Anderson-Darling test that doesn't have the same sample size restrictions
+
+library(nortest)
+ad.test(resid(interaction3_model_fix))
+
+bptest(backwardBIC_bcmodel)
+ad.test(resid(backwardBIC_bcmodel))
+
+```
