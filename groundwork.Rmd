@@ -4,13 +4,11 @@ output: html_document
 date: "2024-11-28"
 ---
 
-Test
-
 ## Title: The Science of Wine: Predicting Quality from Chemical Properties
 
 ### 1. Complete the dataset
 
-We combine "winequality-white.csv" and "winequality-red.csv" and add a new variable, `color`, which represents as 1 for red wine and 0 for white wine.
+We combine "winequality-white.csv" and "winequality-red.csv" and add a new variable, `color` which represents 1 for red wine and 0 for white wine.
 
 ```{r}
 
@@ -36,9 +34,20 @@ str(wine_data_combined)
 
 When it comes to "quality" variable that we are using as the target variable, we use the variable as numeric, assuming that the difference between a quality of 6 and 7 is the same as the difference between a quality of 7 and 8 and allowing to make predictions for any quality.
 
+#### 1.2 Check For missing data
+
+```{r}
+# Check if there is any missing data in the dataset
+anyNA(wine_data_combined)  # Returns TRUE if there are missing values
+
+# Summarize missing values per column
+colSums(is.na(wine_data_combined))
+
+```
+
 ### 2. Look into Colinearity
 
-When we look into the colinearity among variables, there seems no big colinearity.
+When we look into the collinearity among variables, there seems no big collinearitys.
 
 ```{r, message = FALSE, warning = FALSE}
 
@@ -57,7 +66,6 @@ round(cor(wine_data_combined), 2)
 We first build additive MLR model for ground work and we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
 
 ```{r}
-
 additive_model = lm(quality ~ ., data = wine_data_combined)
 
 # Adjusted R Sqaured 
