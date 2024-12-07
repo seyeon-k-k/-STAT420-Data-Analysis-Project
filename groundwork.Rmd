@@ -55,12 +55,43 @@ library(faraway)
 pairs(wine_data_combined, col = "darkorange")
 
 ```
+
 ```{r}
 
 round(cor(wine_data_combined), 2)
 
 ```
 
+Visualize Correlation Matrix with Heatmap
+```{r}
+library(corrplot)
+cor_matrix <- cor(wine_data_combined[, sapply(wine_data_combined, is.numeric)])
+corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45)
+
+```
+
+1. Correlations with the Target Variable (Qaulity)
+1.1 Strongest Correlation: alcohol
+  - The Correlation of 0.44 is moderately positive.
+  - It indicates that higher alcohol content is asscoviated with higher wine quality; thus, alcohole is likely a strong predictor
+1.2 Weak Correlations:
+  - `Sulphates`, `citric.acid`, and `free.sulfur.dioxide` have a weak or negligible correlation with `quality`.
+  - These may not significantly contribute to predicting wine quality unless interacions are involved.
+1.3 Negative Correlations:
+  - `volatile.acidity` with $r=-0.27$ indicates that a higher valatile acidity (associated with wine spoilage) lowers the overall quality.
+  - `density` with  $r=-0.31$ shows that the higher density correlates with lower quality. Improper fermantation or excessive sugar contents could possily plays a role here.
+
+2. Multicollinearity Between Predictors
+2.1 Higher Correlated Predictors
+  - `total.sulfur.dioxide` and `free.sulfur.dioxide` have a high corraltion with $r=0.72$. We can consider using one or combining them.
+  - `volatile.acidity` and `color` with $r=0.65$ also have significant correlation. Red wine (`color = 1`) might tend to have higher volatile acidity.
+2.2 Some Correlations
+  - `fixed.acidity` and `density` with $r=0.46$ are positively correlated, likely because higher acidity contributes to higher density.
+  - `color` and `chlorides` with $r=0.51$. Red wine appears to have higher chloride levels on average.
+  
+3 Little Correlation
+  - `pH` and `Sulphates` show minimal correlation with `quality`, $r=0.02$ and $r=0.04$ respectively. 
+  
 ### 3. Build Additive Multi Linear Regression Model
 
 We first build additive MLR model for ground work and we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
