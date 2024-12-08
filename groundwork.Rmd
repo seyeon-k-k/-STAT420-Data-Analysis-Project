@@ -92,6 +92,44 @@ corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45)
 3 Little Correlation
   - `pH` and `Sulphates` show minimal correlation with `quality`, $r=0.02$ and $r=0.04$ respectively. 
   
+
+
+#### 2.2 Testing baseline model based on Correlations
+Assuming that the correlations exist, the predictors are `alcohol`, `volatile.acidity`, `density`, and `color`.
+
+```{r}
+lm_baseline <- lm(quality ~ alcohol + volatile.acidity + density + color, data = wine_data_combined)
+summary(lm_baseline)
+
+```
+
+**Predictor Coefficients:**
+  - `Alcohol` (0.36874) is highly significant the $p < 2.2*10^{-16}$.
+  With each unit increase in alcohol content, wine quality increases by 0.368 points, holding other predictors constant.
+  - `volatile.acidity`(-1.678659) is highly significant the $p < 2.2*10^{-16}$.
+  For each unit increases in volatile acidity, wine quality decreases by 1.677 points, holdinh other predictors constant. 
+  - `density` (29.29930), for each unit increase in denstiy, wine quality increase by 29.3 points, but this is less intuitive and required futher investigation.
+  - `color` (0.13504) is significant with $p = 2.58*10^{-5}$
+  
+**Model Summary**
+ Residual Standard Error of 0.7467 incicates that the average deviation of the observed quality socres from the predicted values.
+ Multiple R-Squared of 0.2693 shows that only around 27% of the variation in quality is explained by this model.
+ Adjusted R-Square of 0.2689 shows that the model is not overfitting but is limited in explainin variability.
+ F-Statistic of 598.2 indicate that at least one predictor is strongly associated with the response as the model is highly significant $p = 2.2*10^{-16}$.
+ 
+
+**Test For Multicollinearity:** Use VIF to confirm the Multicollinearity
+
+```{r}
+library(car)
+vif(lm_baseline)
+
+```
+
+VIF Scores:
+ - All predictors have VIF < 5 showing no serious multicollonearity issues; thus, no predictors need to be removed based on the VIF.  
+  
+  
 ### 3. Build Additive Multi Linear Regression Model
 
 We first build additive MLR model for ground work and we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
@@ -286,7 +324,7 @@ backwardBIC_bcmodel_CVRMSE
 
 ```
 
-### 9. Choose the best model
+### 8. Choose the best model
 
 ```{r}
 
@@ -337,6 +375,7 @@ abline(h = 0, col = "darkorange", lwd = 2)
 Here we can see the issue with the structure of our data. Since our response variable "quality" is discrete, we are facing problems with the residuals because the MLR model assumes continuous data and seeing violations of homoscedasticity and linearity assumption.
 
 Here we do Breusch-Pagan Test and Shapiro-Wilk Test for formal testing and find very small p-values for both tests as we expected.
+
 
 ```{r, message = FALSE, warning = FALSE}
 
