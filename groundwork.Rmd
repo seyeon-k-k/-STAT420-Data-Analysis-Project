@@ -117,6 +117,14 @@ summary(lm_baseline)
  Adjusted R-Square of 0.2689 shows that the model is not overfitting but is limited in explainin variability.
  F-Statistic of 598.2 indicate that at least one predictor is strongly associated with the response as the model is highly significant $p = 2.2*10^{-16}$.
  
+**Test for Significance of Density Predictor** Use ANOVA to check if it makes a significant difference
+
+```{r}
+model_wo_density <- lm(quality ~ alcohol + volatile.acidity + color, data = wine_data_combined)
+
+anova(lm_baseline, model_wo_density)
+```
+A p-value of 2.938e-09 is significant, indicating that the difference resulting from removing the density predictor is significant. Therefore, the model is better off with density included than not.
 
 **Test For Multicollinearity:** Use VIF to confirm the Multicollinearity
 
@@ -128,8 +136,96 @@ vif(lm_baseline)
 
 VIF Scores:
  - All predictors have VIF < 5 showing no serious multicollonearity issues; thus, no predictors need to be removed based on the VIF.  
-  
-  
+
+Now, we will experiment with models using different interaction terms of the four non-collinear variables shown above (alcohol, color, density, and volatile.acidity) to see what would be an optimal model. 
+```{r}
+model2 <- lm(quality ~ (alcohol + volatile.acidity + density + color)^2, data = wine_data_combined)
+
+summary(model2)
+```
+
+```{r}
+model3 <- lm(quality ~ (alcohol + volatile.acidity + density + color)^3, data = wine_data_combined)
+
+summary(model2)
+```
+
+```{r}
+model4 <- lm(quality ~ (alcohol + volatile.acidity + density + color)^4, data = wine_data_combined)
+
+summary(model4)
+```
+
+Looking at the revised models including only the significant terms from the 2, 3, and 4 way interaction models, and comparing them to the baseline model, gives us this:
+
+```{r}
+model_red2 <- lm(
+  quality ~ alcohol + density + alcohol:volatile.acidity + alcohol:density + volatile.acidity:color,
+  data = wine_data_combined
+)
+
+model_red3 <- lm(
+  quality ~ alcohol + density + alcohol:volatile.acidity:color,
+  data = wine_data_combined
+)
+```
+
+```{r}
+bic_values <- data.frame(
+  Model = c("lm_baseline", "model_red2", "model_red3", "model4"),
+  BIC = c(BIC(lm_baseline), BIC(model_red2), BIC(model_red3), BIC(model4))
+)
+
+print(bic_values)
+```
+
+The 4 way interaction model has the smallest BIC value, despite it being the most complex.
+<br><br>
+Now, let's run a  bi-directional step function to find what R thinks is the optimal model. Then, we will compare this to the best of the models from above, which is the 4 way interaction model.
+
+```{r}
+max_model <- lm(quality ~ (alcohol + volatile.acidity + density + color)^4, data = wine_data_combined)
+
+null_model <- lm(quality ~ 1, data = wine_data_combined)
+
+step_model <- step(lm_baseline, scope = list(lower = null_model, upper = max_model), direction = "both", trace = 1)
+
+summary(step_model)
+```
+
+**Conduct Checks on the Stepwise Model**
+
+```{r}
+plot(step_model)
+```
+
+```{r}
+vif(step_model, type = 'predictor')
+```
+
+```{r}
+BIC(step_model)
+```
+
+```{r}
+library(caret)
+
+step_formula <- formula(step_model)
+
+train_ctrl <- trainControl(method = "cv", number = 10)
+
+cv_model <- train(step_formula, 
+                  data = wine_data_combined, 
+                  method = "lm",        
+                  trControl = train_ctrl) 
+
+print(cv_model)
+
+cv_model$results
+```
+
+This stepwise model seems to perform better than or about the same as the 4 way interaction model in each statistic, so using the predictors alcohol, density, color, and volatile.acidity, this will be the preferred model to use. 
+
 ### 3. Build Additive Multi Linear Regression Model
 
 We first build additive MLR model for ground work and we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
