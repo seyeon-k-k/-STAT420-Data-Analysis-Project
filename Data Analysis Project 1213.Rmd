@@ -1,0 +1,318 @@
+---
+title: "Data Analysis Project Proposal"
+output: html_document
+date: "2024-11-28"
+---
+
+## Title: The Science of Wine: Predicting Quality from Chemical Properties
+
+### 1. Introduction
+
+Wine quality is typically assessed through sensory evaluation by wine experts, who rate wines based on attributes like taste, aroma, and appearance. However, sensory evaluations can be subjective and costly. So, developing models that predict wine quality based on measurable chemical properties would be in demand. In this study, we aim to use data from two types of wines - white and red - to predict wine quality using Machine Learning Models.
+
+### 2. Methods
+
+#### 2.1. Complete the dataset
+
+We combine "winequality-white.csv" and "winequality-red.csv" and add a new variable, `color` which represents 1 for red wine and 0 for white wine.
+
+```{r}
+
+wine_data_white = read.csv("winequality-white.csv", sep=";")
+
+# Add the "color" variable for white wine (0 = white wine)
+wine_data_white$color = 0
+
+wine_data_red = read.csv("winequality-red.csv", sep=";")
+
+# Add the "color" variable for red wine (1 = red wine)
+wine_data_red$color = 1
+
+# Combine the two datasets
+wine_data_combined = rbind(wine_data_white, wine_data_red)
+
+# Make sure the "quality" variable is numeric
+wine_data_combined$quality <- as.numeric(wine_data_combined$quality)
+
+str(wine_data_combined)
+
+```
+
+When it comes to "quality" variable that we are using as the target variable, we use the variable as numeric, assuming that the difference between a quality of 6 and 7 is the same as the difference between a quality of 7 and 8 and allowing to make predictions for any quality.
+
+##### 2.2.1 Check For missing data
+
+```{r}
+
+# Summarize missing values per column
+colSums(is.na(wine_data_combined))
+
+```
+
+#### 2.2. Look into Collinearity
+
+```{r}
+
+round(cor(wine_data_combined), 2)
+
+```
+
+Let's visualize Correlation Matrix with Heatmap
+
+```{r, message = FALSE, warning = FALSE}
+library(corrplot)
+cor_matrix <- cor(wine_data_combined[, sapply(wine_data_combined, is.numeric)])
+corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45)
+
+```
+
+##### 2.2.1 Correlations with the Target Variable (quality)
+1. Strongest Correlation: alcohol
+  - The Correlation of 0.44 is moderately positive.
+  - It indicates that higher alcohol content is associated with higher wine quality; thus, alcohol is likely a strong predictor
+
+2. Little Correlations:
+  - `residual.sugar`, `total.sulfur.dioxide`, `pH` and `Sulphates` show minimal correlation with `quality`, $r=0.02$ and $r=0.04$ respectively. 
+  
+3. Negative Correlations:
+  - `volatile.acidity` with $r=-0.27$ indicates that a higher volatile acidity (associated with wine spoilage) lowers the overall quality.
+  - `density` with  $r=-0.31$ shows that the higher density correlates with lower quality. (Improper fermentation or excessive sugar contents could possibly play a role here)
+
+##### 2.2.2 Multicollinearity Between Predictors
+1. Higher Correlated Predictors
+  - `total.sulfur.dioxide` and `free.sulfur.dioxide` have a high correlation of $r=0.72$. We can consider using one or combining them.
+  - `volatile.acidity` and `color` with $r=0.65$ also have significant correlation. Red wine (`color = 1`) might tend to have higher volatile acidity.
+  
+2. Some Correlations
+  - `fixed.acidity` and `density` with $r=0.46$ are positively correlated, likely because higher acidity contributes to higher density.
+  - `color` and `chlorides` with $r=0.51$. Red wine appears to have higher chloride levels on average.
+  
+
+#### 2.3. Build Various Multi Linear Regression Model
+
+We first build additive MLR model for ground work, assuming that the correlations exist, the predictors are `volatile.acidity`, `chlorides`, `density`, `alcohol` and `color` whose correlation with quality is bigger than 0.1 in magnitude. Here, we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
+
+```{r}
+additive_model = lm(quality ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined)
+
+coef(additive_model)
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model) / (1 - hatvalues(additive_model))) ^ 2))
+additive_model_CVRMSE
+
+```
+
+**Predictor Coefficients:**
+  - `Alcohol` (0.36874) is highly significant the $p < 2.2*10^{-16}$.
+  With each unit increase in alcohol content, wine quality increases by 0.368 points, holding other predictors constant.
+  - `volatile.acidity`(-1.678659) is highly significant the $p < 2.2*10^{-16}$.
+  For each unit increases in volatile acidity, wine quality decreases by 1.677 points, holdinh other predictors constant. 
+  - `density` (29.29930), for each unit increase in denstiy, wine quality increase by 29.3 points, but this is less intuitive and required futher investigation.
+  - `color` (0.13504) is significant with $p = 2.58*10^{-5}$
+ 
+
+**Test For Multicollinearity:** Use VIF to confirm the Multicollinearity
+
+```{r, message = FALSE, warning = FALSE}
+library(car)
+vif(additive_model)
+```
+
+VIF Scores:
+ - All predictors have VIF < 5 showing no multicollinearity issues; thus, no predictors need to be removed based on the VIF.
+  
+**Diagnosis For Influential Points:**  
+
+Here, let's take a look at influential points.
+
+```{r, message = FALSE, warning = FALSE}
+
+sum(cooks.distance(additive_model) > 4 / length(cooks.distance(additive_model)))
+
+```
+Here we find 317 influential points in our dataset and remove them which actually works!!
+
+```{r, message = FALSE, warning = FALSE}
+
+cd = cooks.distance(additive_model)
+
+additive_model_fix = lm(quality ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model_fix)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model_fix) / (1 - hatvalues(additive_model_fix))) ^ 2))
+additive_model_CVRMSE
+
+```
+
+Here we try two-way interaction model and three-way interaction model and two-way interaction model with quadratic terms as well using the same predictors. 
+
+```{r}
+
+interaction2_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2, data = wine_data_combined)
+
+cd = cooks.distance(interaction2_model)
+
+interaction2_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction2_model_adjR2 = summary(interaction2_model_fix)$adj.r.squared
+interaction2_model_adjR2
+# Cross-Validated RMSE 
+interaction2_model_CVRMSE = sqrt(mean((resid(interaction2_model_fix) / (1 - hatvalues(interaction2_model_fix))) ^ 2))
+interaction2_model_CVRMSE
+
+```
+
+```{r}
+
+interaction3_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^3, data = wine_data_combined)
+
+cd = cooks.distance(interaction3_model)
+
+interaction3_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^3, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction3_model_adjR2 = summary(interaction3_model_fix)$adj.r.squared
+interaction3_model_adjR2
+# Cross-Validated RMSE 
+interaction3_model_CVRMSE = sqrt(mean((resid(interaction3_model_fix) / (1 - hatvalues(interaction3_model_fix))) ^ 2))
+interaction3_model_CVRMSE
+```
+```{r}
+
+poly_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2 + I(volatile.acidity^2) + I(chlorides^2) + I(density^2) + I(alcohol^2) + I(color^2), data = wine_data_combined)
+
+cd = cooks.distance(poly_model)
+
+poly_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2 + I(volatile.acidity^2) + I(chlorides^2) + I(density^2) + I(alcohol^2) + I(color^2), data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+poly_model_adjR2 = summary(poly_model_fix)$adj.r.squared
+poly_model_adjR2
+# Cross-Validated RMSE 
+poly_model_CVRMSE = sqrt(mean((resid(poly_model_fix) / (1 - hatvalues(poly_model_fix))) ^ 2))
+poly_model_CVRMSE
+
+```
+
+#### 2.4. Make The Response Logged
+
+We just give it a shot on logging the response.
+
+```{r}
+
+response_log_model = lm(log(quality) ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined)
+
+cd = cooks.distance(response_log_model)
+
+response_log_model_fix = lm(log(quality) ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+response_log_model_adjR2 = summary(response_log_model_fix)$adj.r.squared
+response_log_model_adjR2
+# Cross-Validated RMSE 
+response_log_model_CVRMSE = sqrt(mean((resid(response_log_model_fix) / (1 - hatvalues(response_log_model_fix))) ^ 2))
+response_log_model_CVRMSE
+```
+
+#### 2.5. Backward Model Selection
+
+Here we first try backward selection procedure with the two-way interaction model with quadratic terms and three-way interaction model. 
+
+```{r}
+# Backward selection procedure with the two-way interaction model
+backwardBIC_model2 = step(poly_model, direction = "backward", k = log(length(resid(poly_model))), trace = 0, na.action = na.omit)
+
+backwardBIC_model2_adjR2 = summary(backwardBIC_model2)$adj.r.squared
+backwardBIC_model2_adjR2
+# Cross-Validated RMSE 
+backwardBIC_model2_CVRMSE = sqrt(mean((resid(backwardBIC_model2) / (1 - hatvalues(backwardBIC_model2))) ^ 2))
+backwardBIC_model2_CVRMSE
+
+# Backward selection procedure with the three-way interaction model
+backwardBIC_model3 = step(interaction3_model, direction = "backward", k = log(length(resid(interaction3_model))), trace = 0, na.action = na.omit)
+
+backwardBIC_model3_adjR2 = summary(backwardBIC_model3)$adj.r.squared
+backwardBIC_model3_adjR2
+# Cross-Validated RMSE 
+backwardBIC_model3_CVRMSE = sqrt(mean((resid(backwardBIC_model3) / (1 - hatvalues(backwardBIC_model3))) ^ 2))
+backwardBIC_model3_CVRMSE
+
+```
+
+### 3. Results
+
+#### 3.1. Choose the best model
+
+```{r}
+
+comparison_table1 =  data.frame(
+  Model = c("Additive Model", "Two-Way Interaction Model", "Three-Way Interaction Model", "Quadractic Model", "Logged Response Additive Model"),
+  Adjusted_R2 = c(additive_model_adjR2, interaction2_model_adjR2, interaction3_model_adjR2, poly_model_adjR2, response_log_model_adjR2),
+  CVRMSE = c(additive_model_CVRMSE, interaction2_model_CVRMSE, interaction3_model_CVRMSE, poly_model_CVRMSE, response_log_model_CVRMSE)
+)
+
+print(comparison_table1)
+
+comparison_table2 =  data.frame(
+  Model = c("Backward Selection From Quadratic Model", "Backward Selection From Three-Way Interaction Model"),
+  Adjusted_R2 = c(backwardBIC_model2_adjR2, backwardBIC_model3_adjR2),
+  CVRMSE = c(backwardBIC_model2_CVRMSE, backwardBIC_model3_CVRMSE)
+)
+
+print(comparison_table2)
+
+```
+
+
+
+
+#### 3.2. Diagnose The Chosen Model 
+
+```{r}
+
+plot(fitted(poly_model_fix), resid(poly_model_fix), col = "grey", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals Plot")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+```
+Here we can see the issue with the structure of our data. Since our response variable "quality" is discrete, we are facing problems with the residuals because the MLR model assumes continuous data and seeing violations of homoscedasticity and linearity assumption.
+
+Here we do Breusch-Pagan Test and Shapiro-Wilk Test for formal testing and find very small p-values for both tests as we expected.
+
+
+```{r, message = FALSE, warning = FALSE}
+
+library(lmtest)
+
+bptest(poly_model_fix)
+
+
+# We cannot use shapiro.test as the sample size is over 5000
+# shapiro.test(resid(backwardBIC_model2))
+
+# Therefore here we use Anderson-Darling test that doesn't have the same sample size restrictions
+
+library(nortest)
+ad.test(resid(poly_model_fix))
+
+```
+
+
+### 4. Discussion
+
+In this project, we conducted various analyses on the dataset and models, applying the concepts learned throughout the class. From the correlation analysis, we found that the predictors volatile.acidity, chlorides, density, alcohol, and color exhibited significant correlations with the response variable ‘quality’, with correlation magnitudes greater than 0.1. We then built Multiple Linear Regression (MLR) models as a foundational step and their transformations, using these predictors.
+
+Diagnostic tests for the best model we chose confirmed non-homoscedastic and non-normal residuals, which is expected given the discrete nature of the quality variable. This highlights that linear regression may not be the ideal approach, and more advanced techniques like generalized linear models or machine learning algorithms (e.g., decision trees, random forests) might offer improved performance. 
+
+Despite these challenges, the models identified significant predictors like volatile acidity, chlorides, density, alcohol in predicting wine quality, demonstrating that chemical properties can predict wine quality. This study provides a foundation for future research to refine models using more complex algorithms that can handle the data’s non-linearities and heteroscedasticity, ultimately improving predictive accuracy.
+
+
+
