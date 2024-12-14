@@ -138,7 +138,7 @@ Here, let's take a look at influential points.
 sum(cooks.distance(additive_model) > 4 / length(cooks.distance(additive_model)))
 
 ```
-Here we find 317 influential points in our dataset and remove them which actually works!!
+Here we find 283 influential points in our dataset and remove them, which actually improves the model's performance.
 
 ```{r, message = FALSE, warning = FALSE}
 
@@ -317,6 +317,3 @@ In this project, we conducted various analyses on the dataset and models, applyi
 Diagnostic tests for the best model we chose confirmed non-homoscedastic and non-normal residuals, which is expected given the discrete nature of the quality variable. This highlights that linear regression may not be the ideal approach, and more advanced techniques like generalized linear models or machine learning algorithms (e.g., decision trees, random forests) might offer improved performance. 
 
 Despite these challenges, the models identified significant predictors like volatile acidity, chlorides, density, alcohol in predicting wine quality, demonstrating that chemical properties can predict wine quality. This study provides a foundation for future research to refine models using more complex algorithms that can handle the data’s non-linearities and heteroscedasticity, ultimately improving predictive accuracy.
-
-
-

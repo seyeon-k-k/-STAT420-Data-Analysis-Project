@@ -493,3 +493,116 @@ bptest(backwardBIC_bcmodel)
 ad.test(resid(backwardBIC_bcmodel))
 
 ```
+
+
+### 10. Grouping
+
+The issue stems from the discreteness of the response variable. While you’ve used transformations, these are limited in mitigating the discreteness, so we decided to try generalizing Linear Models. The `Logistic regression` can model this type of data effectively, especially if we bin quality into categories (e.g., Low, Medium, High).
+
+```{r}
+wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+```
+
+We categorize it into a meaningful groups to simplify the classification process and make it more interpretable. Now, we try to fit the logistic Regression model. The LRM will predict the probability of each catagory and allow us to quantify the effect if each predictor on these probabilities.
+
+```{r}
+wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+# Fit logistic regression model
+logistic_model <- glm(quality_group ~ volatile.acidity + chlorides + density + alcohol + color,
+                      data = wine_data_combined, family = "binomial")
+summary(logistic_model)
+
+```
+**Checking Multicollinearity:**
+```{r}
+vif(logistic_model)
+```
+
+**Residuals vs Fitted Plot:**
+```{r}
+plot(fitted(logistic_model), residuals(logistic_model, type = "deviance"), 
+     main = "Residuals vs Fitted", xlab = "Fitted values", ylab = "Deviance Residuals")
+abline(h = 0, col = "red")
+
+```
+
+**Confusion Matrix:**
+```{r}
+library(caret)
+predicted <- ifelse(predict(logistic_model, type = "response") > 0.5, "High", "Low")
+confusionMatrix(as.factor(predicted), as.factor(wine_data_combined$quality_group))
+```
+
+Accuracy : 0.2372 which is worse than a naive model (Always predicting the majority class "medium"). The model predicts "Medium" as 0%, meaning the logistic regression fails to classify the majority group effectively.
+
+**Stepwise Model Selection:**
+Perform both forward and backward selections to find the most optimal combination of predictors based on AIC.
+```{r}
+step_model <- step(logistic_model, direction = "both")
+summary(step_model)
+
+```
+
+The stepwise procedure removed chlorides, leaving volatile.acidity, density, alcohol, and color.
+This reduced the AIC from 6861.1 to 6860.3, a minimal improvement.
+
+Let's try adding Polynomial Terms to our predictors to model non0leanrer effects.
+
+```{r}
+logistic_model_poly <- glm(quality_group ~ volatile.acidity + I(density^2) + alcohol + color,
+                           data = wine_data_combined, family = "binomial")
+summary(logistic_model_poly)
+
+```
+**Test interaction effects between predictors**
+```{r}
+logistic_model_inter <- glm(quality_group ~ volatile.acidity * alcohol + density * color, 
+                            data = wine_data_combined, family = "binomial")
+summary(logistic_model_inter)
+
+```
+Model Performance:
+
+Residual Deviance: 6838.2 (lower than previous models, indicating better fit).
+AIC: 6852.2 (slightly improved from 6860.2 in the logistic model without interaction terms).
+
+
+Try keeping only the significant interaction (volatile.acidity:alcohol)
+```{r}
+logistic_model_refined <- glm(quality_group ~ volatile.acidity + alcohol + density + color + volatile.acidity:alcohol,
+                              data = wine_data_combined, family = "binomial")
+summary(logistic_model_refined)
+
+```
+Slightly Improvement
+
+```{r}
+# Generate predicted probabilities
+predicted_probs <- predict(logistic_model_refined, type = "response")
+
+# Set threshold to classify probabilities into "Low", "Medium", "High"
+# Here, Medium (class 2) is treated as the default for balancing
+predicted_classes <- ifelse(predicted_probs < 0.33, "Low", 
+                            ifelse(predicted_probs < 0.67, "Medium", "High"))
+
+# Convert to factor with levels matching actual data
+predicted_classes <- factor(predicted_classes, levels = c("Low", "Medium", "High"))
+
+# Create confusion matrix
+library(caret)
+confusion_mat <- confusionMatrix(predicted_classes, wine_data_combined$quality_group)
+
+# Print confusion matrix and accuracy metrics
+print(confusion_mat)
+
+```
+
+Much better performance compared to where we started.  While 31% accuracy might seem low, predicting three classes is inherently more challenging than binary classification. This suggests room for improvement.
+
+
