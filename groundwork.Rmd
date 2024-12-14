@@ -64,6 +64,7 @@ round(cor(wine_data_combined), 2)
 
 Visualize Correlation Matrix with Heatmap
 ```{r}
+# install.packages("corrplot")
 library(corrplot)
 cor_matrix <- cor(wine_data_combined[, sapply(wine_data_combined, is.numeric)])
 corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45)

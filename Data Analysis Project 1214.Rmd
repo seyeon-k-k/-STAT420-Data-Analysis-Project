@@ -118,6 +118,7 @@ additive_model_CVRMSE
 **Test For Multicollinearity:** Use VIF to confirm the Multicollinearity
 
 ```{r, message = FALSE, warning = FALSE}
+# install.packages("car")
 library(car)
 vif(additive_model)
 ```
