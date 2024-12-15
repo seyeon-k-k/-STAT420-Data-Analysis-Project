@@ -251,6 +251,56 @@ backwardBIC_model3_CVRMSE
 
 ```
 
+#### 2.6 Logistic Regression with Grouped Response Variables
+To address the issue of discreteness in the response variable, we explored an alternative approach by grouping the quality variable into these categories: Low (0-5), medium (6-7), and High (8-10). This allowed us to fit a logistic regression model which is more appropriate for categorical outcomes.
+
+##### 2.6.1 Grouping the response variable:
+  The `quality` variable was transformed into a factor variable of 3 levels: low, medium, and high.
+  
+``` {r}
+  wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+```
+
+##### 2.6.2 Fitting the Logistic Regression Model:
+  We initially fitted a logistic regression model using predictors such as `valotile.acidity`, `chorides`, `density`, `alcohol`, and `color`.
+  
+```{r}
+logistic_model <- glm(quality_group ~ volatile.acidity + chlorides + density + alcohol + color,
+                      data = wine_data_combined, family = "binomial")
+summary(logistic_model)
+
+```
+##### 2.6.3 Refining the Model:
+- Stepwise Selection: We used both forward and backward stepwise selection to identify a subset of predictors that minimized the AIC. The final model excluded `chlorides`, with minimal improvement in the AIC (from 6861.1 to 6860.3).
+- Polynomial Terms: Polynomial terms were added to model potential non-linear relationships, leading to a slight reduction in residual deviance.
+- Interaction Effects: We tested interaction terms, identifying a significant interaction between `volatile.acidity` and `alcohol`.
+
+##### 2.6.4 Model Evaluation:
+To evaluate the logistic regression model, we generated a confusion matrix and calculated accuracy. Despite iterative refinements, the best logistic regression model achieved an accuracy of 31%, which was lower than the performance of our linear regression models in terms of RMSE. Below is the finalized model for this approach.
+
+```{r}
+logistic_model_refined <- glm(quality_group ~ volatile.acidity + alcohol + density + color + volatile.acidity:alcohol,
+                              data = wine_data_combined, family = "binomial")
+summary(logistic_model_refined)
+
+```
+
+```{r, message = FALSE, warning = FALSE}
+predicted_probs <- predict(logistic_model_refined, type = "response")
+predicted_classes <- ifelse(predicted_probs < 0.33, "Low", 
+                            ifelse(predicted_probs < 0.67, "Medium", "High"))
+confusion_mat <- confusionMatrix(as.factor(predicted_classes), wine_data_combined$quality_group)
+print(confusion_mat)
+
+```
+There's a slight improvement with the interaction terms from 6850.2 to 6838.6; however, the classification accuracy remained low, particularly for the majority class, medium. In short, this model struggles to balance sensitivity and specificity across all categories.
+
+While logistic regression was a valuable exploration, it did not outperform the linear regression models in terms of predictive power or classification accuracy. Therefore, we chose not to use this approach as our final model. Details of this analysis can be found in Appendix A.
+
+
 ### 3. Results
 
 #### 3.1. Choose the best model
@@ -275,8 +325,7 @@ print(comparison_table2)
 
 ```
 
-
-
+We also explored a logistic regression approach, grouping the response variable into three categories. Despite refining the logistic model using polynomial terms and interaction effects, it achieved a classification accuracy of 31%, which is lower than the performance of our best linear regression model in terms of RMSE. Given the goal of predicting wine quality as a continuous measure, the logistic regression was not selected as our final model.
 
 #### 3.2. Diagnose The Chosen Model 
 
@@ -316,4 +365,116 @@ In this project, we conducted various analyses on the dataset and models, applyi
 
 Diagnostic tests for the best model we chose confirmed non-homoscedastic and non-normal residuals, which is expected given the discrete nature of the quality variable. This highlights that linear regression may not be the ideal approach, and more advanced techniques like generalized linear models or machine learning algorithms (e.g., decision trees, random forests) might offer improved performance. 
 
+The logistic regression approach, which grouped the response variable into three categories, demonstrated that classification accuracy for predicting discrete wine quality could be moderately improved. However, the challenges in classifying the majority 'Medium' group effectively, combined with lower performance metrics compared to our linear regression models, made this approach less suitable for our primary goal of predicting continuous wine quality ratings.
+
 Despite these challenges, the models identified significant predictors like volatile acidity, chlorides, density, alcohol in predicting wine quality, demonstrating that chemical properties can predict wine quality. This study provides a foundation for future research to refine models using more complex algorithms that can handle the data’s non-linearities and heteroscedasticity, ultimately improving predictive accuracy.
+
+### 5. Appendix
+#### 5.1 Appendix A
+The issue stems from the discreteness of the response variable. While you’ve used transformations, these are limited in mitigating the discreteness, so we decided to try generalizing Linear Models. The `Logistic regression` can model this type of data effectively, especially if we bin quality into categories (e.g., Low, Medium, High).
+
+```{r}
+wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+```
+
+We categorize it into a meaningful groups to simplify the classification process and make it more interpretable. Now, we try to fit the logistic Regression model. The LRM will predict the probability of each catagory and allow us to quantify the effect if each predictor on these probabilities.
+
+```{r}
+wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+# Fit logistic regression model
+logistic_model <- glm(quality_group ~ volatile.acidity + chlorides + density + alcohol + color,
+                      data = wine_data_combined, family = "binomial")
+summary(logistic_model)
+
+```
+**Checking Multicollinearity:**
+```{r}
+vif(logistic_model)
+```
+
+**Residuals vs Fitted Plot:**
+```{r}
+plot(fitted(logistic_model), residuals(logistic_model, type = "deviance"), 
+     main = "Residuals vs Fitted", xlab = "Fitted values", ylab = "Deviance Residuals")
+abline(h = 0, col = "red")
+
+```
+
+**Confusion Matrix:**
+```{r}
+library(caret)
+predicted <- ifelse(predict(logistic_model, type = "response") > 0.5, "High", "Low")
+confusionMatrix(as.factor(predicted), as.factor(wine_data_combined$quality_group))
+```
+
+Accuracy : 0.2372 which is worse than a naive model (Always predicting the majority class "medium"). The model predicts "Medium" as 0%, meaning the logistic regression fails to classify the majority group effectively.
+
+**Stepwise Model Selection:**
+Perform both forward and backward selections to find the most optimal combination of predictors based on AIC.
+```{r}
+step_model <- step(logistic_model, direction = "both")
+summary(step_model)
+
+```
+
+The stepwise procedure removed chlorides, leaving volatile.acidity, density, alcohol, and color.
+This reduced the AIC from 6861.1 to 6860.3, a minimal improvement.
+
+Let's try adding Polynomial Terms to our predictors to model non0leanrer effects.
+
+```{r}
+logistic_model_poly <- glm(quality_group ~ volatile.acidity + I(density^2) + alcohol + color,
+                           data = wine_data_combined, family = "binomial")
+summary(logistic_model_poly)
+
+```
+**Test interaction effects between predictors**
+```{r}
+logistic_model_inter <- glm(quality_group ~ volatile.acidity * alcohol + density * color, 
+                            data = wine_data_combined, family = "binomial")
+summary(logistic_model_inter)
+
+```
+Model Performance:
+
+Residual Deviance: 6838.2 (lower than previous models, indicating better fit).
+AIC: 6852.2 (slightly improved from 6860.2 in the logistic model without interaction terms).
+
+
+Try keeping only the significant interaction (volatile.acidity:alcohol)
+```{r}
+logistic_model_refined <- glm(quality_group ~ volatile.acidity + alcohol + density + color + volatile.acidity:alcohol,
+                              data = wine_data_combined, family = "binomial")
+summary(logistic_model_refined)
+
+```
+Slightly Improvement
+
+```{r}
+# Generate predicted probabilities
+predicted_probs <- predict(logistic_model_refined, type = "response")
+
+# Set threshold to classify probabilities into "Low", "Medium", "High"
+# Here, Medium (class 2) is treated as the default for balancing
+predicted_classes <- ifelse(predicted_probs < 0.33, "Low", 
+                            ifelse(predicted_probs < 0.67, "Medium", "High"))
+
+# Convert to factor with levels matching actual data
+predicted_classes <- factor(predicted_classes, levels = c("Low", "Medium", "High"))
+
+# Create confusion matrix
+library(caret)
+confusion_mat <- confusionMatrix(predicted_classes, wine_data_combined$quality_group)
+
+# Print confusion matrix and accuracy metrics
+print(confusion_mat)
+
+```
+
+Much better performance compared to where we started.  While 31% accuracy might seem low, predicting three classes is inherently more challenging than binary classification. This suggests room for improvement.
