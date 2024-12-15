@@ -1,3 +1,4 @@
+=======
 ---
 title: "Data Analysis Project Proposal"
 output: html_document
@@ -604,5 +605,3 @@ print(confusion_mat)
 ```
 
 Much better performance compared to where we started.  While 31% accuracy might seem low, predicting three classes is inherently more challenging than binary classification. This suggests room for improvement.
-
-
