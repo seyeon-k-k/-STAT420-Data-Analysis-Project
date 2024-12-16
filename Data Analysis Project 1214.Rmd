@@ -380,7 +380,7 @@ wine_data_combined$quality_group <- cut(wine_data_combined$quality,
 
 ```
 
-We categorize it into a meaningful groups to simplify the classification process and make it more interpretable. Now, we try to fit the logistic Regression model. The LRM will predict the probability of each catagory and allow us to quantify the effect if each predictor on these probabilities.
+We categorize it into a meaningful groups to simplify the classification process and make it more interpretable. Now, we try to fit the logistic Regression model. The LRM will predict the probability of each category and allow us to quantify the effect if each predictor on these probabilities.
 
 ```{r}
 wine_data_combined$quality_group <- cut(wine_data_combined$quality, 
@@ -426,7 +426,7 @@ summary(step_model)
 The stepwise procedure removed chlorides, leaving volatile.acidity, density, alcohol, and color.
 This reduced the AIC from 6861.1 to 6860.3, a minimal improvement.
 
-Let's try adding Polynomial Terms to our predictors to model non0leanrer effects.
+Let's try adding Polynomial Terms to our predictors to model non-linear effects.
 
 ```{r}
 logistic_model_poly <- glm(quality_group ~ volatile.acidity + I(density^2) + alcohol + color,
