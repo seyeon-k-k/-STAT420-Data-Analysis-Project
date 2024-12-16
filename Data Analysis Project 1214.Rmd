@@ -2,6 +2,11 @@
 title: "Data Analysis Project Proposal"
 output: html_document
 date: "2024-11-28"
+author:
+  - "Jadepan Thedthong"
+  - "Pranav Yalamanchili"
+  - "Seyeon Kim"
+  - "Isaac Aruldas"
 ---
 
 ## Title: The Science of Wine: Predicting Quality from Chemical Properties
