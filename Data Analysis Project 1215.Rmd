@@ -1,0 +1,505 @@
+---
+title: "Data Analysis Project Report"
+output: html_document
+date: "2024-12-15"
+author:
+  - "Jadepan Thedthong"
+  - "Pranav Yalamanchili"
+  - "Seyeon Kim"
+  - "Isaac Aruldas"
+---
+
+## Title: The Science of Wine: Predicting Quality from Chemical Properties
+
+### 1. Introduction
+
+The objective of this report is to predict wine quality based on various chemical features such as alcohol content, pH, and volatile acidity. Understanding and predicting wine quality is not only crucial for consumers, who seek consistent and high-quality products, but also for winemakers, who can optimize production processes to enhance product quality. 
+
+Traditionally, wine quality is typically assessed through sensory evaluation by wine experts, who rate wines based on attributes like taste, aroma, and appearance. However, sensory evaluations can be subjective, time-consuming, and costly. Therefore, developing predictive models based on measurable chemical properties would provide a more efficient and scalable solution.
+
+Given the complexity and variability of wine production, predicting quality is a challenging task. In this study, we aim to use data from two types of wines - white and red - to predict wine quality using Machine Learning Models. Multiple regression models are explored to identify the most accurate and reliable model for predicting wine quality. The analysis includes testing several linear regression techniques, evaluating and comparing model performance in order to choose the best approach.
+
+
+### 2. Methods
+
+#### 2.1. Complete the dataset
+
+We combine "winequality-white.csv" and "winequality-red.csv" and add a new variable, `color` which represents 1 for red wine and 0 for white wine.
+
+```{r}
+
+wine_data_white = read.csv("winequality-white.csv", sep=";")
+
+# Add the "color" variable for white wine (0 = white wine)
+wine_data_white$color = 0
+
+wine_data_red = read.csv("winequality-red.csv", sep=";")
+
+# Add the "color" variable for red wine (1 = red wine)
+wine_data_red$color = 1
+
+# Combine the two datasets
+wine_data_combined = rbind(wine_data_white, wine_data_red)
+
+# Make sure the "quality" variable is numeric
+wine_data_combined$quality <- as.numeric(wine_data_combined$quality)
+
+str(wine_data_combined)
+
+```
+
+When it comes to "quality" variable that we are using as the target variable, we use the variable as numeric, assuming that the difference between a quality of 6 and 7 is the same as the difference between a quality of 7 and 8 and allowing to make predictions for any quality.
+
+##### 2.2.1 Check For missing data
+
+```{r}
+
+# Summarize missing values per column
+colSums(is.na(wine_data_combined))
+
+```
+
+#### 2.2. Look into Collinearity
+
+```{r}
+
+round(cor(wine_data_combined), 2)
+
+```
+
+Let's visualize Correlation Matrix with Heatmap
+
+```{r, message = FALSE, warning = FALSE}
+library(corrplot)
+cor_matrix <- cor(wine_data_combined[, sapply(wine_data_combined, is.numeric)])
+corrplot(cor_matrix, method = "color", tl.col = "black", tl.srt = 45)
+
+```
+
+##### 2.2.1 Correlations with the Target Variable (quality)
+1. Strongest Correlation: alcohol
+  - The Correlation of 0.44 is moderately positive.
+  - It indicates that higher alcohol content is associated with higher wine quality; thus, alcohol is likely a strong predictor
+
+2. Little Correlations:
+  - `residual.sugar`, `total.sulfur.dioxide`, `pH` and `Sulphates` show minimal correlation with `quality`, $r=0.02$ and $r=0.04$ respectively. 
+  
+3. Negative Correlations:
+  - `volatile.acidity` with $r=-0.27$ indicates that a higher volatile acidity (associated with wine spoilage) lowers the overall quality.
+  - `density` with  $r=-0.31$ shows that the higher density correlates with lower quality. (Improper fermentation or excessive sugar contents could possibly play a role here)
+
+##### 2.2.2 Multicollinearity Between Predictors
+1. Higher Correlated Predictors
+  - `total.sulfur.dioxide` and `free.sulfur.dioxide` have a high correlation of $r=0.72$. We can consider using one or combining them.
+  - `volatile.acidity` and `color` with $r=0.65$ also have significant correlation. Red wine (`color = 1`) might tend to have higher volatile acidity.
+  
+2. Some Correlations
+  - `fixed.acidity` and `density` with $r=0.46$ are positively correlated, likely because higher acidity contributes to higher density.
+  - `color` and `chlorides` with $r=0.51$. Red wine appears to have higher chloride levels on average.
+  
+
+#### 2.3. Build Various Multi Linear Regression Model
+
+We first build additive MLR model for ground work, assuming that the correlations exist, the predictors are `volatile.acidity`, `chlorides`, `density`, `alcohol` and `color` whose correlation with quality is bigger than 0.1 in magnitude. Here, we find that the model has low adjusted R squared and high cross-validated RMSE, we can't say this is a good model.
+
+```{r}
+additive_model = lm(quality ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined)
+
+summary(additive_model)
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model) / (1 - hatvalues(additive_model))) ^ 2))
+additive_model_CVRMSE
+
+```
+
+**Predictor Coefficients:**
+
+- `volatile.acidity`(-1.66526) is highly significant with $p-value < 2.2*10^{-16}$.
+For a unit increases in volatile acidity, the wine quality decreases by 1.665, holding other predictors constant. 
+- `chlorides` (-0.79411) is highly significant with $p-value = 0.0135$.
+With a unit increase in chlorides content, the wine quality decreases by 0.794, holding other predictors constant.
+- `density` (29.30094) is highly significant with $p-value < 2.89*10^{-9}$, for a unit increase in density, the wine quality increase by 29.3, but this is less intuitive and requires futher investigation.
+- `alcohol` (0.36317) is highly significant with $p-value < 2.2*10^{-16}$.
+With a unit increase in alcohol content, the wine quality increases by 0.363, holding other predictors constant.
+- `color` (0.16031) is significant with $p-value = 1.46*10^{-6}$
+ 
+
+**Test For Multicollinearity:** Use VIF to confirm the Multicollinearity
+
+```{r, message = FALSE, warning = FALSE}
+# install.packages("car")
+library(car)
+vif(additive_model)
+```
+
+VIF Scores:
+ - All predictors have VIF < 5 showing no multicollinearity issues; thus, no predictors need to be removed based on the VIF.
+  
+**Diagnosis For Influential Points:**  
+
+Here, let's take a look at influential points.
+
+```{r, message = FALSE, warning = FALSE}
+
+sum(cooks.distance(additive_model) > 4 / length(cooks.distance(additive_model)))
+
+```
+Here we find 283 influential points in our dataset and remove them, which actually improves the model's performance.
+
+```{r, message = FALSE, warning = FALSE}
+
+cd = cooks.distance(additive_model)
+
+additive_model_fix = lm(quality ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+additive_model_adjR2 = summary(additive_model_fix)$adj.r.squared
+additive_model_adjR2
+# Cross-Validated RMSE 
+additive_model_CVRMSE = sqrt(mean((resid(additive_model_fix) / (1 - hatvalues(additive_model_fix))) ^ 2))
+additive_model_CVRMSE
+
+```
+
+The linear regression model, which assumes linear relationship between predictors and the response variable, is our baseline model. However, given the possibility of nonlinear relationships in the data, we also build interaction and quadratic regression models. Here we try two-way interaction model and three-way interaction model and two-way interaction model with quadratic terms as well using the same predictors. 
+
+```{r}
+
+interaction2_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2, data = wine_data_combined)
+
+cd = cooks.distance(interaction2_model)
+
+interaction2_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction2_model_adjR2 = summary(interaction2_model_fix)$adj.r.squared
+interaction2_model_adjR2
+# Cross-Validated RMSE 
+interaction2_model_CVRMSE = sqrt(mean((resid(interaction2_model_fix) / (1 - hatvalues(interaction2_model_fix))) ^ 2))
+interaction2_model_CVRMSE
+
+```
+
+```{r}
+
+interaction3_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^3, data = wine_data_combined)
+
+cd = cooks.distance(interaction3_model)
+
+interaction3_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^3, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+interaction3_model_adjR2 = summary(interaction3_model_fix)$adj.r.squared
+interaction3_model_adjR2
+# Cross-Validated RMSE 
+interaction3_model_CVRMSE = sqrt(mean((resid(interaction3_model_fix) / (1 - hatvalues(interaction3_model_fix))) ^ 2))
+interaction3_model_CVRMSE
+```
+```{r}
+
+poly_model = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2 + I(volatile.acidity^2) + I(chlorides^2) + I(density^2) + I(alcohol^2) + I(color^2), data = wine_data_combined)
+
+cd = cooks.distance(poly_model)
+
+poly_model_fix = lm(quality ~ (volatile.acidity + chlorides + density + alcohol + color)^2 + I(volatile.acidity^2) + I(chlorides^2) + I(density^2) + I(alcohol^2) + I(color^2), data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+poly_model_adjR2 = summary(poly_model_fix)$adj.r.squared
+poly_model_adjR2
+# Cross-Validated RMSE 
+poly_model_CVRMSE = sqrt(mean((resid(poly_model_fix) / (1 - hatvalues(poly_model_fix))) ^ 2))
+poly_model_CVRMSE
+
+```
+
+#### 2.4. Make The Response Logged
+
+We just give it a shot on logging the response.
+
+```{r}
+
+response_log_model = lm(log(quality) ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined)
+
+cd = cooks.distance(response_log_model)
+
+response_log_model_fix = lm(log(quality) ~ volatile.acidity + chlorides + density + alcohol + color, data = wine_data_combined, subset = cd < 4 / length(cd))
+
+# Adjusted R Sqaured 
+response_log_model_adjR2 = summary(response_log_model_fix)$adj.r.squared
+response_log_model_adjR2
+# Cross-Validated RMSE 
+response_log_model_CVRMSE = sqrt(mean((resid(response_log_model_fix) / (1 - hatvalues(response_log_model_fix))) ^ 2))
+response_log_model_CVRMSE
+```
+
+#### 2.5. Backward Model Selection
+
+Here we first try backward selection procedure with the two-way interaction model with quadratic terms and three-way interaction model. 
+
+```{r}
+# Backward selection procedure with the two-way interaction model
+backwardBIC_model2 = step(poly_model, direction = "backward", k = log(length(resid(poly_model))), trace = 0, na.action = na.omit)
+
+backwardBIC_model2_adjR2 = summary(backwardBIC_model2)$adj.r.squared
+backwardBIC_model2_adjR2
+# Cross-Validated RMSE 
+backwardBIC_model2_CVRMSE = sqrt(mean((resid(backwardBIC_model2) / (1 - hatvalues(backwardBIC_model2))) ^ 2))
+backwardBIC_model2_CVRMSE
+
+# Backward selection procedure with the three-way interaction model
+backwardBIC_model3 = step(interaction3_model, direction = "backward", k = log(length(resid(interaction3_model))), trace = 0, na.action = na.omit)
+
+backwardBIC_model3_adjR2 = summary(backwardBIC_model3)$adj.r.squared
+backwardBIC_model3_adjR2
+# Cross-Validated RMSE 
+backwardBIC_model3_CVRMSE = sqrt(mean((resid(backwardBIC_model3) / (1 - hatvalues(backwardBIC_model3))) ^ 2))
+backwardBIC_model3_CVRMSE
+
+```
+
+#### 2.6 Logistic Regression with Grouped Response Variables
+
+To address the issue of discreteness in the response variable, we explored an alternative approach by grouping the quality variable into these categories: Low (0-5), medium (6-7), and High (8-10). This allowed us to fit a logistic regression model which is more appropriate for categorical outcomes.
+
+##### 2.6.1 Grouping the response variable:
+
+The `quality` variable was transformed into a factor variable of 3 levels: low, medium, and high.
+  
+``` {r}
+wine_data_combined$quality_group = cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+```
+
+##### 2.6.2 Fitting the Logistic Regression Model:
+
+We initially fitted a logistic regression model using predictors such as `valotile.acidity`, `chorides`, `density`, `alcohol`, and `color`.
+  
+```{r}
+logistic_model = glm(quality_group ~ volatile.acidity + chlorides + density + alcohol + color,
+                      data = wine_data_combined, family = "binomial")
+summary(logistic_model)
+
+```
+##### 2.6.3 Refining the Model: (Further detail and code in 5.1 Appendix A)
+
+- Stepwise Selection: We used both forward and backward stepwise selection to identify a subset of predictors that minimize the AIC. The final model excluded `chlorides`, with minimal improvement in the AIC (from 6861.1 to 6860.3).
+- Polynomial Terms: Polynomial terms were added to model potential non-linear relationships, leading to a slight reduction in residual deviance.
+- Interaction Effects: We tested interaction terms, identifying a significant interaction between `volatile.acidity` and `alcohol`.
+
+##### 2.6.4 Model Evaluation:
+To evaluate the logistic regression model, we generated a confusion matrix and calculated accuracy. Despite iterative refinements, the best logistic regression model achieved an accuracy of 31%, which was lower than the performance of our linear regression models in terms of RMSE. Below is the finalized model for this approach.
+
+```{r}
+logistic_model_refined = glm(quality_group ~ volatile.acidity + alcohol + density + color + volatile.acidity:alcohol,
+                              data = wine_data_combined, family = "binomial")
+summary(logistic_model_refined)
+
+```
+
+```{r, message = FALSE, warning = FALSE}
+library(caret)
+
+predicted_probs = predict(logistic_model_refined, type = "response")
+predicted_classes = ifelse(predicted_probs < 0.33, "Low", 
+                            ifelse(predicted_probs < 0.67, "Medium", "High"))
+confusion_mat = confusionMatrix(as.factor(predicted_classes), wine_data_combined$quality_group)
+print(confusion_mat)
+
+```
+There's a slight improvement with the interaction terms from 6850.2 to 6838.6; however, the classification accuracy remained low, particularly for the majority class, medium. In short, this model struggles to balance sensitivity and specificity across all categories.
+
+While logistic regression was a valuable exploration, it did not outperform the linear regression models in terms of predictive power or classification accuracy. Therefore, we chose not to use this approach as our final model. Details of this analysis can be found in Appendix A.
+
+
+### 3. Results
+
+#### 3.1. Choose the best model
+
+```{r}
+
+comparison_table1 =  data.frame(
+  Model = c("Additive Model", "Two-Way Interaction Model", "Three-Way Interaction Model", "Quadractic Model", "Logged Response Additive Model"),
+  Adjusted_R2 = c(additive_model_adjR2, interaction2_model_adjR2, interaction3_model_adjR2, poly_model_adjR2, response_log_model_adjR2),
+  CVRMSE = c(additive_model_CVRMSE, interaction2_model_CVRMSE, interaction3_model_CVRMSE, poly_model_CVRMSE, response_log_model_CVRMSE)
+)
+
+print(comparison_table1)
+
+comparison_table2 =  data.frame(
+  Model = c("Backward Selection From Quadratic Model", "Backward Selection From Three-Way Interaction Model"),
+  Adjusted_R2 = c(backwardBIC_model2_adjR2, backwardBIC_model3_adjR2),
+  CVRMSE = c(backwardBIC_model2_CVRMSE, backwardBIC_model3_CVRMSE)
+)
+
+print(comparison_table2)
+
+```
+Here, we will choose Quadractic Model and Logged Response Additive Model as they have high Adjusted R2 with comparably low CV-RMSE (Logged Response Additive Model has significantly low CV-RMSE)
+
+We also explored a logistic regression approach, grouping the response variable into three categories. Despite refining the logistic model using polynomial terms and interaction effects, it achieved a classification accuracy of 31%, which is lower than the performance of our best linear regression model in terms of RMSE. Given the goal of predicting wine quality as a continuous measure, the logistic regression was not selected as our final model.
+
+#### 3.2. Diagnose The Chosen Model 
+
+```{r}
+
+plot(fitted(poly_model_fix), resid(poly_model_fix), col = "grey", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals Plot")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+plot(fitted(response_log_model_fix), resid(response_log_model_fix), col = "grey", pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = "Fitted vs Residuals Plot")
+abline(h = 0, col = "darkorange", lwd = 2)
+
+```
+Here we can see the issue with the structure of our data from Fitted vs Residuals Plot of two models. Since our response variable "quality" is discrete, we are facing problems with the residuals because the MLR model assumes continuous data and seeing violations of homoscedasticity and linearity assumption.
+
+Here we do Breusch-Pagan Test and Shapiro-Wilk Test for formal testing and find very small p-values for both tests as we expected.
+
+
+```{r, message = FALSE, warning = FALSE}
+
+library(lmtest)
+
+bptest(poly_model_fix)
+
+
+# We cannot use shapiro.test as the sample size is over 5000
+# shapiro.test(resid(backwardBIC_model2))
+
+# Therefore here we use Anderson-Darling test that doesn't have the same sample size restrictions
+
+library(nortest)
+ad.test(resid(poly_model_fix))
+
+bptest(response_log_model_fix)
+ad.test(resid(response_log_model_fix))
+
+```
+
+
+### 4. Discussion
+
+In this project, we conducted various analyses on the dataset and models, applying the concepts learned throughout the class. From the correlation analysis, we found that the predictors volatile.acidity, chlorides, density, alcohol, and color exhibited significant correlations with the response variable ‘quality’, with correlation magnitudes greater than 0.1. We then built Multiple Linear Regression (MLR) models as a foundation step and their transformations, using these predictors.
+
+Diagnostic tests for the best model we chose confirmed non-homoscedastic and non-normal residuals, which is expected given the discrete nature of the quality variable. This highlights that linear regression may not be the ideal approach, and more advanced techniques like generalized linear models or machine learning algorithms (e.g., decision trees, random forests) might offer improved performance. 
+
+The logistic regression approach we tried, which grouped the response variable into three categories, demonstrated that classification accuracy for predicting discrete wine quality could be moderately improved. However, the challenges in classifying the majority 'Medium' group effectively, combined with lower performance metrics compared to our linear regression models, made this approach less suitable for our primary goal of predicting continuous wine quality ratings.
+
+Despite these challenges, the models identified significant predictors like volatile acidity, chlorides, density, alcohol in predicting wine quality, demonstrating that chemical properties can predict wine quality. This study provides a foundation for future research to refine models using more complex algorithms that can handle the data’s non-linearities and heteroscedasticity, ultimately improving predictive accuracy.
+
+### 5. Appendix
+#### 5.1 Appendix A
+
+The issue stems from the discreteness of the response variable. While you’ve used transformations, these are limited in mitigating the discreteness, so we decided to try generalizing Linear Models. The `Logistic regression` can model this type of data effectively, especially if we bin quality into categories (e.g., Low, Medium, High).
+
+```{r}
+wine_data_combined$quality_group = cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+```
+
+We categorize it into groups to simplify the classification process and make it more interpretable. Now, we try to fit the Logistic Regression Model. The LRM will predict the probability of each category and allow us to quantify the effect if each predictor on these probabilities.
+
+```{r}
+wine_data_combined$quality_group = cut(wine_data_combined$quality, 
+                                        breaks = c(0, 5, 7, 10), 
+                                        labels = c("Low", "Medium", "High"))
+
+# Fit logistic regression model
+logistic_model = glm(quality_group ~ volatile.acidity + chlorides + density + alcohol + color,
+                      data = wine_data_combined, family = "binomial")
+summary(logistic_model)
+
+```
+**Checking Multicollinearity:**
+```{r}
+vif(logistic_model)
+```
+
+**Residuals vs Fitted Plot:**
+```{r}
+plot(fitted(logistic_model), residuals(logistic_model, type = "deviance"), 
+     main = "Residuals vs Fitted", xlab = "Fitted values", ylab = "Deviance Residuals")
+abline(h = 0, col = "red")
+
+```
+
+**Confusion Matrix:**
+```{r}
+library(caret)
+predicted = ifelse(predict(logistic_model, type = "response") > 0.5, "High", "Low")
+confusionMatrix(as.factor(predicted), as.factor(wine_data_combined$quality_group))
+```
+
+Accuracy : 0.2372 which is worse than a naive model (Always predicting the majority class "medium"). The model predicts "Medium" as 0%, meaning the logistic regression fails to classify the majority group effectively.
+
+**Stepwise Model Selection:**
+Perform both forward and backward selections to find the most optimal combination of predictors based on AIC.
+```{r}
+step_model = step(logistic_model, direction = "both")
+summary(step_model)
+
+```
+
+The stepwise procedure removed chlorides, leaving volatile.acidity, density, alcohol, and color.
+This reduced the AIC from 6861.1 to 6860.3, a minimal improvement.
+
+Let's try adding Polynomial Terms to our predictors to model non-linear effects.
+
+```{r}
+logistic_model_poly = glm(quality_group ~ volatile.acidity + I(density^2) + alcohol + color,
+                           data = wine_data_combined, family = "binomial")
+summary(logistic_model_poly)
+
+```
+**Test interaction effects between predictors**
+```{r}
+logistic_model_inter = glm(quality_group ~ volatile.acidity * alcohol + density * color, 
+                            data = wine_data_combined, family = "binomial")
+summary(logistic_model_inter)
+
+```
+Model Performance:
+
+Residual Deviance: 6838.2 (lower than previous models, indicating better fit).
+AIC: 6852.2 (slightly improved from 6860.2 in the logistic model without interaction terms).
+
+
+Try keeping only the significant interaction (volatile.acidity:alcohol)
+```{r}
+logistic_model_refined <- glm(quality_group ~ volatile.acidity + alcohol + density + color + volatile.acidity:alcohol,
+                              data = wine_data_combined, family = "binomial")
+summary(logistic_model_refined)
+
+```
+Slight Improvement
+
+```{r}
+# Generate predicted probabilities
+predicted_probs <- predict(logistic_model_refined, type = "response")
+
+# Set threshold to classify probabilities into "Low", "Medium", "High"
+# Here, Medium (class 2) is treated as the default for balancing
+predicted_classes <- ifelse(predicted_probs < 0.33, "Low", 
+                            ifelse(predicted_probs < 0.67, "Medium", "High"))
+
+# Convert to factor with levels matching actual data
+predicted_classes <- factor(predicted_classes, levels = c("Low", "Medium", "High"))
+
+# Create confusion matrix
+library(caret)
+confusion_mat <- confusionMatrix(predicted_classes, wine_data_combined$quality_group)
+
+# Print confusion matrix and accuracy metrics
+print(confusion_mat)
+
+```
+
+Much better performance compared to where we started.  While 31% accuracy might seem low, predicting three classes is inherently more challenging than binary classification. This suggests room for improvement.
